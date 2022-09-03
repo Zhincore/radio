@@ -1,11 +1,12 @@
 import { createServer } from "http";
 import { Radio } from "./Radio.js";
+import { onExit } from "./onExit.js";
 import config from "./config.js";
 
 if (!Object.keys(config.sources).length) throw new Error("No sources found, define them in `config.js`.");
 
 const radios = Object.entries(config.sources).reduce((obj, [key, path]) => {
-  obj[key.toLowerCase()] = new Radio(path);
+  obj[key.toLowerCase()] = new Radio(key, path);
   return obj;
 }, {});
 
@@ -27,11 +28,14 @@ function processRequest(req, res) {
     Pragma: "no-cache",
     "Cache-Control": "no-cache, no-store",
   });
+  const destroy = () => req.destroy();
 
-  radio.output.pipe(res);
+  radio.output.pipe(res, { end: true });
+  radio.output.on("close", destroy);
 
   res.on("close", () => {
     radio.output.unpipe(res);
+    radio.output.off("close", destroy);
   });
 }
 
@@ -49,6 +53,8 @@ server.addListener("listening", () => {
 
 server.listen(config.port ?? 9099);
 
-function env(key, fallback) {
-  return process.env[key] ? process.env[key] : fallback;
-}
+onExit(() => {
+  if (!server.listening) return;
+  server.close();
+  console.log("Exitting...");
+});
