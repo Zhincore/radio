@@ -6,17 +6,22 @@ import { spawn } from "child_process";
 import config from "./config.js";
 
 const ALLOW_EXTS = [".mp3", ".ogg", ".mp4", ".m4a"];
+const DESIRED_PLAYLIST_LENGTH = 8;
+const HIGH_WATER_MARK = 1;
 
 const audioConf = config.advanced;
 
 export class Radio {
   playlist = [];
   output = new PassThrough({
-    highWaterMark: 1024,
+    highWaterMark: HIGH_WATER_MARK,
+    allowHalfOpen: false,
+    decodeStrings: false,
+    objectMode: false,
   });
 
   constructor(musicFolder) {
-    this.musicFolder = Path.resolve(musicFolder.replace(/^~/, os.homedir()));
+    this.musicFolder = Path.resolve(musicFolder.replace(/^~/, () => os.homedir()));
     this.play();
   }
 
@@ -34,26 +39,27 @@ export class Radio {
     do {
       shuffle(dir);
       // prevent repeating same song if possible
-    } while (dir.length != 1 && dir[0] == this.playlist[this.playlist.length - 1]);
+    } while (dir.length > 1 && dir[0] == this.playlist[this.playlist.length - 1]);
 
     this.playlist.push(...dir);
   }
 
   async nextSong() {
-    if (!this.playlist.length) await this.fillPlaylist();
+    if (this.playlist.length < DESIRED_PLAYLIST_LENGTH) await this.fillPlaylist();
 
     return this.playlist.shift();
   }
 
   async play() {
     const song = await this.nextSong();
-    const decoder = spawn(
+    const ffmpeg = spawn(
       "ffmpeg",
       [
         process.env.NODE_ENV === "production" && ["-v", "warning"],
         ["-re"],
         ["-i", Path.join(this.musicFolder, song)],
         ["-use_wallclock_as_timestamps", 1],
+        ["-rtbufsize", "8k"],
         ["-map_metadata", -1],
         ["-map", "a:0"],
         ["-vn"],
@@ -65,17 +71,20 @@ export class Radio {
         ["-f", "mp3"],
         "-",
       ]
-        .flat()
-        .filter((v) => v),
+        .filter((v) => v)
+        .flat(),
+      { maxBuffer: 1024 },
     );
-    decoder.stderr.pipe(process.stderr);
+    ffmpeg.stderr.pipe(process.stderr, { end: false });
 
-    decoder.stdout._readableState.highWaterMark = 1024;
-    decoder.stdout.pipe(this.output, { end: false });
+    // NOTE: discouraged
+    ffmpeg.stdout._readableState.highWaterMark = HIGH_WATER_MARK;
 
-    decoder.on("close", () => {
-      decoder.stderr.unpipe();
-      decoder.stdout.unpipe();
+    ffmpeg.stdout.pipe(this.output, { end: false });
+
+    ffmpeg.on("close", () => {
+      ffmpeg.stderr.unpipe();
+      ffmpeg.stdout.unpipe();
       this.play();
     });
   }

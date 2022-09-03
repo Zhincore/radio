@@ -28,13 +28,10 @@ function processRequest(req, res) {
     "Cache-Control": "no-cache, no-store",
   });
 
-  const listener = (data) => {
-    res.write(data);
-  };
-  radio.output.on("data", listener);
+  radio.output.pipe(res);
 
   res.on("close", () => {
-    radio.output.off("data", listener);
+    radio.output.unpipe(res);
   });
 }
 
