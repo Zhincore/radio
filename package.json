@@ -1,0 +1,13 @@
+{
+  "name": "radio",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "node ."
+  },
+  "keywords": []
+}
