@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import { rmSync } from "fs";
 import { PassThrough } from "stream";
+import net from "net";
 import Path from "path";
 import os from "os";
 import { spawn } from "child_process";
@@ -17,7 +18,7 @@ const TMPD_PROMISE = fs.mkdtemp(Path.join(os.tmpdir(), "zhinradio-")).then((v) =
 
 let closing = false;
 const ffmpegs = new Set();
-const outputs = [];
+const servers = [];
 const audioConf = config.advanced;
 
 export class Radio {
@@ -31,11 +32,12 @@ export class Radio {
     objectMode: false,
   });
 
+  serverPath = null;
+
   constructor(name, musicFolder) {
     this.name = name;
     this.musicFolder = Path.resolve(musicFolder.replace(/^~/, () => os.homedir()));
     this.play();
-    outputs.push(this.output);
   }
 
   async fillPlaylist() {
@@ -58,6 +60,28 @@ export class Radio {
     this.playlist.push(...dir);
   }
 
+  async createServer() {
+    // We use unix socket between the app and ffmpeg to reduce buffering
+    if (this.serverPath) return this.serverPath;
+
+    const tmpd = await TMPD_PROMISE;
+
+    const server = net.createServer((stream) => {
+      // NOTE: Using `_readableState` is discouraged
+      stream._readableState.highWaterMark = HIGH_WATER_MARK;
+
+      stream.pipe(this.output, { end: false });
+    });
+    server.maxConnections = 1;
+    servers.push(server);
+    server.on("close", () => this.output.end());
+
+    this.serverPath = Path.join(tmpd, `radio-${this.name}.sock`);
+    return new Promise((resolve) =>
+      server.listen({ path: this.serverPath, backlog: 1 }, () => resolve(this.serverPath)),
+    );
+  }
+
   async nextSong() {
     if (this.playlist.length < DESIRED_PLAYLIST_LENGTH) await this.fillPlaylist();
 
@@ -66,6 +90,7 @@ export class Radio {
 
   async play() {
     const song = await this.nextSong();
+    const path = await this.createServer();
     const ffmpeg = spawn(
       "ffmpeg",
       [
@@ -85,20 +110,19 @@ export class Radio {
         ["-b:a", audioConf.bitRate],
         ["-c:a", "libmp3lame"],
         ["-f", "mp3"],
-        "-",
+        `unix://${path}`,
       ]
         .filter((v) => v)
         .flat(),
+      {
+        stdio: ["ignore", "ignore", "pipe"],
+      },
     );
     ffmpegs.add(ffmpeg);
     ffmpeg.stderr.pipe(process.stderr, { end: false });
 
-    ffmpeg.stdout._readableState.highWaterMark = HIGH_WATER_MARK;
-    ffmpeg.stdout.pipe(this.output);
-
     ffmpeg.on("close", () => {
       ffmpeg.stderr.unpipe();
-      ffmpeg.stdout.unpipe();
       ffmpegs.delete(ffmpeg);
       if (!closing) this.play();
     });
@@ -126,9 +150,11 @@ function exitHook(async) {
     }
     await Promise.all(promises);
 
-    for (const output of outputs) {
-      output.end();
+    promises.length = 0;
+    for (const server of servers) {
+      promises.push(promisify(server.close.bind(server))());
     }
+    await Promise.all(promises);
 
     fs.rm(await TMPD_PROMISE, { recursive: true, force: true });
   })().catch(console.error);
