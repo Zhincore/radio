@@ -11,7 +11,6 @@ export default {
 
   /** These are passed to ffmpeg */
   advanced: {
-    sampleRate: 44100,
     bitRate: "128k",
     channels: 2,
     /** Seconds of silence between files, prevents audio glitches between songs */
