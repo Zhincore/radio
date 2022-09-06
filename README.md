@@ -7,7 +7,7 @@ Simple audio streaming app in NodeJS with zero dependencies
 - Lightweight
 - Simple to use
 - Supports multiple radios
-- Stops playing when noone's listening (small internal buffers fill up)
+- Stops playing when noone's listening
 - Chooses files at random and tries to repeat as little as possible
 
 ## Requirements
@@ -20,6 +20,6 @@ Simple audio streaming app in NodeJS with zero dependencies
 
 1. Copy `config.example.js` to `config.js`.
 2. Change `config.js` to your needs.
-3. Start with `node .`, `node index.js` or `npm start`
+3. Start with `node .`, `node lib/main` or `npm start`
 
 Start with environment variable `NODE_ENV=production` to hide console spam from ffmpeg.

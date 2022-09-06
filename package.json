@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "index.js",
+  "main": "lib/main.js",
   "private": true,
   "license": "GPL-3.0-or-later",
   "scripts": {
