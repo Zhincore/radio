@@ -1,13 +1,8 @@
 export default {
-  /**
-   * Sources to take music from, the format is `name: "/path/to/folder"`.
-   * Name is then used in url (e.g. `/name` will play radio with name "name")
-   */
-  sources: {
-    default: "~/Music", // Name `default` will be available under both urls `/` and `/default`
-  },
-  /** Whether subfolder of source folder should be searched for audio too */
-  recursive: true,
+  music: "~/Music",
+  ads: "~/Music",
+  musicCount: 3,
+  adCount: 3,
   /** Port to listen on. Set as 0 to let the OS choose, or `null` to use 9099 */
   port: 9099,
 
